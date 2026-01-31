@@ -1,13 +1,8 @@
-IF DB_ID('finance_committee') IS NULL
-BEGIN
-    CREATE DATABASE finance_committee;
-END
-GO
+CREATE DATABASE IF NOT EXISTS finance_committee;
 USE finance_committee;
-GO
 
 CREATE TABLE fc_members (
-    id INT IDENTITY(1,1) PRIMARY KEY,
+    id INT PRIMARY KEY AUTO_INCREMENT,
     name VARCHAR(120),
     email VARCHAR(120) UNIQUE,
     password_hash VARCHAR(200),
@@ -15,7 +10,7 @@ CREATE TABLE fc_members (
 );
 
 CREATE TABLE sponsors (
-    id INT IDENTITY(1,1) PRIMARY KEY,
+    id INT PRIMARY KEY AUTO_INCREMENT,
     name VARCHAR(150),
     industry VARCHAR(100),
     contact_person VARCHAR(120),
@@ -26,7 +21,7 @@ CREATE TABLE sponsors (
 );
 
 CREATE TABLE events (
-    id INT IDENTITY(1,1) PRIMARY KEY,
+    id INT PRIMARY KEY AUTO_INCREMENT,
     name VARCHAR(150),
     date DATE,
     budget FLOAT,
@@ -35,7 +30,7 @@ CREATE TABLE events (
 );
 
 CREATE TABLE sponsorships (
-    id INT IDENTITY(1,1) PRIMARY KEY,
+    id INT PRIMARY KEY AUTO_INCREMENT,
     sponsor_id INT,
     event_id INT,
     amount FLOAT,
