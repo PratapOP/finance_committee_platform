@@ -215,7 +215,7 @@ class SponsorsManager {
 
     async handleAddSponsor() {
         try {
-            const sponsorData = this.promptForSponsorData();
+            const sponsorData = await this.handleSponsorSubmit();
             if (!sponsorData) return; // User cancelled
 
             apiUtils.setLoading(true);
@@ -225,10 +225,10 @@ class SponsorsManager {
             this.sponsors.push(result.sponsor);
             this.renderSponsors();
             
-            apiUtils.showSuccess('Sponsor added successfully!');
+            this.showModal('Sponsor added successfully!', false);
         } catch (error) {
             console.error('Failed to add sponsor:', error);
-            apiUtils.showError(error, 'add-sponsor-error');
+            this.showModal(error.message, true);
         } finally {
             apiUtils.setLoading(false);
         }
@@ -241,7 +241,7 @@ class SponsorsManager {
                 throw new Error('Sponsor not found');
             }
 
-            const updatedData = this.promptForSponsorData(sponsor);
+            const updatedData = await this.handleSponsorSubmit(sponsor);
             if (!updatedData) return; // User cancelled
 
             apiUtils.setLoading(true);
@@ -254,10 +254,10 @@ class SponsorsManager {
             }
             
             this.renderSponsors();
-            apiUtils.showSuccess('Sponsor updated successfully!');
+            this.showModal('Sponsor updated successfully!', false);
         } catch (error) {
             console.error('Failed to edit sponsor:', error);
-            apiUtils.showError(error, 'edit-sponsor-error');
+            this.showModal(error.message, true);
         } finally {
             apiUtils.setLoading(false);
         }
@@ -309,29 +309,106 @@ class SponsorsManager {
         }
     }
 
-    promptForSponsorData(existingSponsor = null) {
-        try {
-            const name = prompt('Sponsor Name:', existingSponsor?.name || '');
-            if (!name || name.trim() === '') {
-                return null;
-            }
-
-            const industry = prompt('Industry:', existingSponsor?.industry || '');
-            const contactPerson = prompt('Contact Person:', existingSponsor?.contact_person || '');
-            const email = prompt('Email:', existingSponsor?.email || '');
-            const phone = prompt('Phone:', existingSponsor?.phone || '');
-
-            return {
-                name: name.trim(),
-                industry: industry.trim() || null,
-                contact_person: contactPerson.trim() || null,
-                email: email.trim() || null,
-                phone: phone.trim() || null
-            };
-        } catch (error) {
-            console.error('Failed to prompt for sponsor data:', error);
-            return null;
+    openModal(sponsor = null) {
+        const modal = document.getElementById('sponsorModal');
+        const form = document.getElementById('sponsorForm');
+        const title = document.getElementById('sponsorModalTitle');
+        
+        // Clear previous messages
+        this.clearMessages();
+        
+        if (sponsor) {
+            // Edit mode - populate form
+            title.textContent = 'Edit Sponsor';
+            document.getElementById('sponsorName').value = sponsor.name || '';
+            document.getElementById('sponsorIndustry').value = sponsor.industry || '';
+            document.getElementById('sponsorContact').value = sponsor.contact_person || '';
+            document.getElementById('sponsorEmail').value = sponsor.email || '';
+            document.getElementById('sponsorPhone').value = sponsor.phone || '';
+            form.dataset.sponsorId = sponsor.id;
+        } else {
+            // Add mode - clear form
+            title.textContent = 'Add Sponsor';
+            form.reset();
+            delete form.dataset.sponsorId;
         }
+        
+        modal.style.display = 'block';
+    }
+
+    closeModal() {
+        const modal = document.getElementById('sponsorModal');
+        modal.style.display = 'none';
+        this.clearMessages();
+    }
+
+    clearMessages() {
+        const errorContainer = document.getElementById('sponsor-error-container');
+        const successContainer = document.getElementById('sponsor-success-container');
+        if (errorContainer) {
+            errorContainer.style.display = 'none';
+            errorContainer.textContent = '';
+        }
+        if (successContainer) {
+            successContainer.style.display = 'none';
+            successContainer.textContent = '';
+        }
+    }
+
+    showModal(message, isError = false) {
+        const container = isError ? 
+            document.getElementById('sponsor-error-container') : 
+            document.getElementById('sponsor-success-container');
+        
+        if (container) {
+            container.textContent = message;
+            container.style.display = 'block';
+            
+            // Auto-hide success messages after 3 seconds
+            if (!isError) {
+                setTimeout(() => {
+                    container.style.display = 'none';
+                    container.textContent = '';
+                }, 3000);
+            }
+        }
+    }
+
+    handleSponsorSubmit(sponsor = null) {
+        return new Promise((resolve, reject) => {
+            this.openModal(sponsor);
+            
+            const form = document.getElementById('sponsorForm');
+            const submitHandler = async (e) => {
+                e.preventDefault();
+                
+                try {
+                    const formData = new FormData(form);
+                    const sponsorData = {
+                        name: formData.get('sponsorName')?.trim(),
+                        industry: formData.get('sponsorIndustry')?.trim() || null,
+                        contact_person: formData.get('sponsorContact')?.trim() || null,
+                        email: formData.get('sponsorEmail')?.trim() || null,
+                        phone: formData.get('sponsorPhone')?.trim() || null
+                    };
+                    
+                    if (!sponsorData.name) {
+                        this.showModal('Sponsor name is required', true);
+                        return;
+                    }
+                    
+                    this.closeModal();
+                    resolve(sponsorData);
+                } catch (error) {
+                    this.showModal(error.message, true);
+                    reject(error);
+                } finally {
+                    form.removeEventListener('submit', submitHandler);
+                }
+            };
+            
+            form.addEventListener('submit', submitHandler);
+        });
     }
 
     escapeHtml(text) {

@@ -37,13 +37,13 @@
                 <option value="last30">Last 30 Days</option>
                 <option value="next30">Next 30 Days</option>
             </select>
-            <button class="btn-primary" id="add-event-btn">Add Event</button>
-            <button class="btn-secondary" id="refresh-events-btn">Refresh</button>
+            <button class="btn-primary btn-icon btn-add" id="add-event-btn">Add Event</button>
+            <button class="btn-secondary btn-icon btn-refresh" id="refresh-events-btn">Refresh</button>
         </div>
     </section>
 
     <!-- Events List -->
-    <section class="stats" id="eventList"></section>
+    <section class="cards-grid" id="eventList"></section>
 
     <!-- Loading Overlay -->
     <div id="loading-overlay" class="loading-overlay" style="display: none;">
@@ -57,7 +57,7 @@
                 <h3 id="modalTitle">Add Event</h3>
                 <span class="close" onclick="window.eventsManager.closeModal()">&times;</span>
             </div>
-            <form id="eventForm">
+            <form id="eventForm" class="modal-form">
                 <!-- Error/Success Messages -->
                 <div id="modal-error-container" class="error-message" style="display: none;"></div>
                 <div id="modal-success-container" class="success-message" style="display: none;"></div>

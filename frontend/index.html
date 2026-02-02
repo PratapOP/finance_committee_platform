@@ -10,6 +10,19 @@
 </head>
 <body>
 
+<!-- Floating Particles Background -->
+<div class="particles-bg">
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+</div>
+
 <!-- Navbar -->
 <nav class="navbar">
     <div class="logo">
@@ -19,40 +32,40 @@
 <div class="nav-links">
         <a href="index.html" class="nav-link active">Home</a>
         <a href="sponsors.html" class="nav-link">Sponsors</a>
-        <a href="#" class="nav-link">Events</a>
+        <a href="events.html" class="nav-link">Events</a>
         <a href="dashboard.html" class="nav-link">Dashboard</a>
         <a href="admin.html" class="nav-link">Admin</a>
     </div>
 </nav>
 
 <!-- Hero Section -->
-<section class="hero">
+<section class="hero page-enter">
     <h1>Powering the Financial Engine of Our Campus</h1>
     <p>
         We manage sponsors, optimize budgets, and deliver measurable ROI
         through data-driven event finance.
     </p>
-    <button class="btn-primary">View Impact</button>
+    <button class="btn-primary btn-icon btn-add" onclick="window.location.href='dashboard.html'">View Impact</button>
 </section>
 
 <!-- Stats Section -->
-<section class="stats">
+<section class="stats page-enter">
     <div class="stat-card">
-        <h2>₹ 12L+</h2>
+        <h2 id="total-sponsorships">₹ 0</h2>
         <p>Total Sponsorships</p>
     </div>
     <div class="stat-card">
-        <h2>40+</h2>
+        <h2 id="events-funded">0</h2>
         <p>Events Funded</p>
     </div>
     <div class="stat-card">
-        <h2>50,000+</h2>
+        <h2 id="students-reached">0</h2>
         <p>Students Reached</p>
     </div>
 </section>
 
 <!-- About -->
-<section class="about">
+<section class="about page-enter">
     <h2>Why Finance Committee?</h2>
     <p>
         We are not just fund raisers. We are financial strategists.
@@ -61,6 +74,78 @@
         and sponsor growth.
     </p>
 </section>
+
+<script type="module">
+    import { apiMethods, apiUtils } from './js/api.js';
+
+    // Function to format number with + sign for large numbers
+    function formatLargeNumber(num, isCurrency = false) {
+        if (num >= 100000) {
+            return isCurrency ? `₹ ${(num / 100000).toFixed(1)}L+` : `${Math.floor(num / 1000)}K+`;
+        }
+        if (num >= 1000) {
+            return isCurrency ? `₹ ${(num / 1000).toFixed(1)}K` : `${Math.floor(num / 1000)}K`;
+        }
+        return isCurrency ? `₹ ${num.toLocaleString()}` : num.toLocaleString();
+    }
+
+    // Function to animate number counting
+    function animateNumber(element, target, isCurrency = false, duration = 2000) {
+        const start = 0;
+        const increment = target / (duration / 16);
+        let current = start;
+
+        const timer = setInterval(() => {
+            current += increment;
+            if (current >= target) {
+                current = target;
+                clearInterval(timer);
+            }
+            element.textContent = formatLargeNumber(Math.floor(current), isCurrency);
+        }, 16);
+    }
+
+    // Load dashboard stats
+    async function loadDashboardStats() {
+        try {
+            const analyticsData = await apiMethods.analytics.getDashboard();
+            
+            if (analyticsData && analyticsData.financial) {
+                // Animate total sponsorships
+                const totalSponsorshipsElement = document.getElementById('total-sponsorships');
+                if (totalSponsorshipsElement && analyticsData.financial.total_sponsor_investment) {
+                    animateNumber(totalSponsorshipsElement, analyticsData.financial.total_sponsor_investment, true);
+                }
+
+                // Animate events funded
+                const eventsFundedElement = document.getElementById('events-funded');
+                if (eventsFundedElement && analyticsData.events?.total_events) {
+                    animateNumber(eventsFundedElement, analyticsData.events.total_events);
+                }
+
+                // Animate students reached (estimated based on engagement)
+                const studentsReachedElement = document.getElementById('students-reached');
+                if (studentsReachedElement) {
+                    // Estimate: each event reaches ~1000-1500 students
+                    const estimatedReach = (analyticsData.events?.total_events || 0) * 1250;
+                    animateNumber(studentsReachedElement, estimatedReach);
+                }
+            }
+        } catch (error) {
+            console.error('Failed to load dashboard stats:', error);
+            // Fallback to default values with animation
+            animateNumber(document.getElementById('total-sponsorships'), 1200000, true); // 12L
+            animateNumber(document.getElementById('events-funded'), 40);
+            animateNumber(document.getElementById('students-reached'), 50000);
+        }
+    }
+
+    // Initialize when DOM is ready
+    document.addEventListener('DOMContentLoaded', () => {
+        // Small delay for visual effect
+        setTimeout(loadDashboardStats, 500);
+    });
+</script>
 
 </body>
 </html>

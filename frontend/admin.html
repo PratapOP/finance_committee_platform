@@ -11,22 +11,21 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-    <!-- Navigation -->
-    <nav class="navbar">
-        <div class="logo">
-            <img src="assets/logo.svg" alt="Finance Committee Logo" onerror="this.style.display='none'">
-            <span>Admin Dashboard</span>
-        </div>
-        <div class="nav-links">
-            <a href="dashboard.html" class="nav-link">Dashboard</a>
-            <a href="sponsors.html" class="nav-link">Sponsors</a>
-            <a href="#" class="nav-link active">Admin</a>
-            <a href="#" class="nav-link" id="logoutBtn">Logout</a>
-        </div>
-    </nav>
 
-    <!-- Main Content -->
-    <div class="admin-container">
+<!-- Floating Particles Background -->
+<div class="particles-bg">
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+</div>
+
+<div class="admin-container">
         <div class="admin-header">
             <h1>Admin Management Panel</h1>
             <p>Manage users, system settings, and platform administration</p>
@@ -39,10 +38,10 @@
         <!-- Admin Sections -->
         <div class="admin-sections">
             <!-- User Management -->
-            <section class="admin-section">
+            <section class="admin-section page-enter">
                 <div class="section-header">
                     <h2>User Management</h2>
-                    <button class="btn-primary" id="addUserBtn">Add User</button>
+                    <button class="btn-primary btn-icon btn-add" id="addUserBtn">Add User</button>
                 </div>
                 <div class="users-grid" id="usersGrid">
                     <div class="loading-placeholder">Loading users...</div>
@@ -50,7 +49,7 @@
             </section>
 
             <!-- System Statistics -->
-            <section class="admin-section">
+            <section class="admin-section page-enter">
                 <h2>System Overview</h2>
                 <div class="admin-stats">
                     <div class="admin-stat-card">
@@ -105,6 +104,48 @@
                     <div class="loading-placeholder">Loading activity...</div>
                 </div>
             </section>
+        </div>
+    </div>
+
+    <!-- User Modal -->
+    <div id="userModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="userModalTitle">Add User</h3>
+                <span class="close" onclick="window.adminManager.closeUserModal()">&times;</span>
+            </div>
+            <form id="userForm" class="modal-form">
+                <div id="user-error-container" class="error-message" style="display: none;"></div>
+                <div id="user-success-container" class="success-message" style="display: none;"></div>
+                
+                <div class="form-group">
+                    <label for="userName">User Name *</label>
+                    <input type="text" id="userName" name="userName" required placeholder="Enter user name">
+                </div>
+                
+                <div class="form-group">
+                    <label for="userEmail">Email Address *</label>
+                    <input type="email" id="userEmail" name="userEmail" required placeholder="email@example.com">
+                </div>
+                
+                <div class="form-group">
+                    <label for="userPassword">Password *</label>
+                    <input type="password" id="userPassword" name="userPassword" required placeholder="Min 8 characters" minlength="8">
+                </div>
+                
+                <div class="form-group">
+                    <label for="userRole">User Role</label>
+                    <select id="userRole" name="userRole" class="filter-select">
+                        <option value="finance">Finance Committee Member</option>
+                        <option value="admin">Administrator</option>
+                    </select>
+                </div>
+                
+                <div class="modal-actions">
+                    <button type="button" class="btn-secondary" onclick="window.adminManager.closeUserModal()">Cancel</button>
+                    <button type="submit" class="btn-primary" id="saveUserBtn">Save User</button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -308,17 +349,17 @@
             }
 
             async handleAddUser() {
-                const userData = this.promptForUserData();
-                if (!userData) return;
-
                 try {
+                    const userData = await this.handleUserSubmit();
+                    if (!userData) return;
+
                     this.setLoading(true);
                     await apiMethods.auth.register(userData);
                     await this.loadUsers(); // Refresh user list
-                    this.handleSuccess('User added successfully!');
+                    this.showUserModal('User added successfully!', false);
                 } catch (error) {
                     console.error('Failed to add user:', error);
-                    this.handleError(error);
+                    this.showUserModal(error.message, true);
                 } finally {
                     this.setLoading(false);
                 }
@@ -374,24 +415,116 @@
                 }
             }
 
-            promptForUserData() {
-                const name = prompt('User Name:');
-                if (!name || name.trim() === '') return null;
+            openUserModal(user = null) {
+                const modal = document.getElementById('userModal');
+                const form = document.getElementById('userForm');
+                const title = document.getElementById('userModalTitle');
+                
+                // Clear previous messages
+                this.clearUserMessages();
+                
+                if (user) {
+                    // Edit mode - populate form
+                    title.textContent = 'Edit User';
+                    document.getElementById('userName').value = user.name || '';
+                    document.getElementById('userEmail').value = user.email || '';
+                    document.getElementById('userPassword').value = '';
+                    document.getElementById('userPassword').placeholder = 'Leave blank to keep current password';
+                    document.getElementById('userRole').value = user.role || 'finance';
+                    form.dataset.userId = user.id;
+                } else {
+                    // Add mode - clear form
+                    title.textContent = 'Add User';
+                    form.reset();
+                    document.getElementById('userPassword').placeholder = 'Min 8 characters';
+                    delete form.dataset.userId;
+                }
+                
+                modal.style.display = 'block';
+            }
 
-                const email = prompt('Email Address:');
-                if (!email || email.trim() === '') return null;
+            closeUserModal() {
+                const modal = document.getElementById('userModal');
+                modal.style.display = 'none';
+                this.clearUserMessages();
+            }
 
-                const password = prompt('Password:');
-                if (!password || password.length < 8) return null;
+            clearUserMessages() {
+                const errorContainer = document.getElementById('user-error-container');
+                const successContainer = document.getElementById('user-success-container');
+                if (errorContainer) {
+                    errorContainer.style.display = 'none';
+                    errorContainer.textContent = '';
+                }
+                if (successContainer) {
+                    successContainer.style.display = 'none';
+                    successContainer.textContent = '';
+                }
+            }
 
-                const role = confirm('Make this user an administrator?') ? 'admin' : 'finance';
+            showUserModal(message, isError = false) {
+                const container = isError ? 
+                    document.getElementById('user-error-container') : 
+                    document.getElementById('user-success-container');
+                
+                if (container) {
+                    container.textContent = message;
+                    container.style.display = 'block';
+                    
+                    // Auto-hide success messages after 3 seconds
+                    if (!isError) {
+                        setTimeout(() => {
+                            container.style.display = 'none';
+                            container.textContent = '';
+                        }, 3000);
+                    }
+                }
+            }
 
-                return {
-                    name: name.trim(),
-                    email: email.trim().toLowerCase(),
-                    password: password,
-                    role: role
-                };
+            handleUserSubmit(user = null) {
+                return new Promise((resolve, reject) => {
+                    this.openUserModal(user);
+                    
+                    const form = document.getElementById('userForm');
+                    const submitHandler = async (e) => {
+                        e.preventDefault();
+                        
+                        try {
+                            const formData = new FormData(form);
+                            const userData = {
+                                name: formData.get('userName')?.trim(),
+                                email: formData.get('userEmail')?.trim().toLowerCase(),
+                                password: formData.get('userPassword')?.trim() || '',
+                                role: formData.get('userRole') || 'finance'
+                            };
+                            
+                            if (!userData.name) {
+                                this.showUserModal('User name is required', true);
+                                return;
+                            }
+                            
+                            if (!userData.email) {
+                                this.showUserModal('Email address is required', true);
+                                return;
+                            }
+                            
+                            if (!form.dataset.userId && userData.password.length < 8) {
+                                this.showUserModal('Password must be at least 8 characters', true);
+                                return;
+                            }
+                            
+                            this.closeUserModal();
+                            resolve(userData);
+                        } catch (error) {
+                            this.showUserModal(error.message, true);
+                            reject(error);
+                        } finally {
+                            form.removeEventListener('submit', submitHandler);
+                        }
+                    };
+                    
+                    form.addEventListener('submit', submitHandler);
+                });
             }
 
             setLoading(loading) {
