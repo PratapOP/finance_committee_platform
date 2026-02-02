@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Events - Finance Committee</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar">
+        <div class="logo">
+            <img src="assets/logo.svg" alt="Finance Committee Logo" onerror="this.style.display='none'">
+            <span>Finance Committee</span>
+        </div>
+        <div class="nav-links">
+            <a href="index.html" class="nav-link">Home</a>
+            <a href="sponsors.html" class="nav-link">Sponsors</a>
+            <a href="#" class="nav-link active">Events</a>
+            <a href="dashboard.html" class="nav-link">Dashboard</a>
+            <a href="admin.html" class="nav-link">Admin</a>
+            <a href="#" id="logoutBtn" class="nav-link">Logout</a>
+        </div>
+    </nav>
+
+    <!-- Events Header -->
+    <section class="sponsors-header">
+        <div class="sponsors-controls">
+            <input type="text" id="search-events" placeholder="Search events..." class="search-input">
+            <select id="date-filter" class="filter-select">
+                <option value="">All Dates</option>
+                <option value="upcoming">Upcoming</option>
+                <option value="past">Past Events</option>
+                <option value="last30">Last 30 Days</option>
+                <option value="next30">Next 30 Days</option>
+            </select>
+            <button class="btn-primary" id="add-event-btn">Add Event</button>
+            <button class="btn-secondary" id="refresh-events-btn">Refresh</button>
+        </div>
+    </section>
+
+    <!-- Events List -->
+    <section class="stats" id="eventList"></section>
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="loading-overlay" style="display: none;">
+        <div class="loading-spinner"></div>
+    </div>
+
+    <!-- Event Form Modal -->
+    <div id="eventModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitle">Add Event</h3>
+                <span class="close" onclick="window.eventsManager.closeModal()">&times;</span>
+            </div>
+            <form id="eventForm">
+                <!-- Error/Success Messages -->
+                <div id="modal-error-container" class="error-message" style="display: none;"></div>
+                <div id="modal-success-container" class="success-message" style="display: none;"></div>
+
+                <!-- Event Name -->
+                <div class="form-group">
+                    <label for="eventName">Event Name</label>
+                    <input type="text" id="eventName" name="eventName" required placeholder="Enter event name">
+                </div>
+
+                <!-- Event Date -->
+                <div class="form-group">
+                    <label for="eventDate">Event Date</label>
+                    <input type="date" id="eventDate" name="eventDate" required>
+                </div>
+
+                <!-- Budget -->
+                <div class="form-group">
+                    <label for="eventBudget">Budget (₹)</label>
+                    <input type="number" id="eventBudget" name="eventBudget" required placeholder="0.00" step="0.01" min="0">
+                </div>
+
+                <!-- Footfall -->
+                <div class="form-group">
+                    <label for="eventFootfall">Expected Footfall</label>
+                    <input type="number" id="eventFootfall" name="eventFootfall" placeholder="0" min="0">
+                </div>
+
+                <!-- Revenue -->
+                <div class="form-group">
+                    <label for="eventRevenue">Actual Revenue (₹)</label>
+                    <input type="number" id="eventRevenue" name="eventRevenue" placeholder="0.00" step="0.01" min="0">
+                </div>
+
+                <!-- Form Actions -->
+                <div class="modal-actions">
+                    <button type="button" class="btn-secondary" onclick="window.eventsManager.closeModal()">Cancel</button>
+                    <button type="submit" class="btn-primary" id="saveEventBtn">Save Event</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script type="module">
+        import { apiMethods, apiUtils } from './js/api.js';
+
+        class EventsManager {
+            constructor() {
+                this.events = [];
+                this.isLoading = false;
+                this.currentEventId = null;
+                this.init();
+            }
+
+            async init() {
+                try {
+                    this.setLoading(true);
+                    await this.loadEvents();
+                    this.setupEventListeners();
+                    this.renderEvents();
+                } catch (error) {
+                    console.error('Events page initialization failed:', error);
+                    apiUtils.showError(error, 'events-error');
+                } finally {
+                    this.setLoading(false);
+                }
+            }
+
+            async loadEvents() {
+                try {
+                    this.events = await apiMethods.events.getAll();
+                    
+                    if (!this.events || !Array.isArray(this.events)) {
+                        throw new Error('Invalid events data received');
+                    }
+                } catch (error) {
+                    console.error('Failed to load events:', error);
+                    apiUtils.showError(error, 'load-events-error');
+                    this.events = [];
+                }
+            }
+
+            setupEventListeners() {
+                try {
+                    // Search functionality
+                    const searchInput = document.getElementById('search-events');
+                    if (searchInput) {
+                        searchInput.addEventListener('input', 
+                            apiUtils.debounce(this.handleSearch.bind(this), 300)
+                        );
+                    }
+
+                    // Add event button
+                    const addBtn = document.getElementById('add-event-btn');
+                    if (addBtn) {
+                        addBtn.addEventListener('click', this.handleAddEvent.bind(this));
+                    }
+
+                    // Refresh button
+                    const refreshBtn = document.getElementById('refresh-events-btn');
+                    if (refreshBtn) {
+                        refreshBtn.addEventListener('click', this.handleRefresh.bind(this));
+                    }
+
+                    // Date filter
+                    const dateFilter = document.getElementById('date-filter');
+                    if (dateFilter) {
+                        dateFilter.addEventListener('change', this.handleFilter.bind(this));
+                    }
+
+                    // Event form submission
+                    const eventForm = document.getElementById('eventForm');
+                    if (eventForm) {
+                        eventForm.addEventListener('submit', this.handleSaveEvent.bind(this));
+                    }
+
+                    // Logout button
+                    const logoutBtn = document.getElementById('logoutBtn');
+                    if (logoutBtn) {
+                        logoutBtn.addEventListener('click', this.handleLogout.bind(this));
+                    }
+                } catch (error) {
+                    console.error('Failed to setup event listeners:', error);
+                }
+            }
+
+            renderEvents(eventsToRender = this.events) {
+                try {
+                    const container = document.getElementById('eventList');
+                    if (!container) {
+                        console.warn('Event list container not found');
+                        return;
+                    }
+
+                    if (eventsToRender.length === 0) {
+                        container.innerHTML = `
+                            <div class="no-data">
+                                <p>No events found.</p>
+                                <button class="btn-primary" onclick="window.eventsManager.handleAddEvent()">
+                                    Add First Event
+                                </button>
+                            </div>
+                        `;
+                        return;
+                    }
+
+                    const eventsHTML = eventsToRender.map(event => this.createEventCard(event)).join('');
+                    container.innerHTML = eventsHTML;
+
+                    this.attachEventCardHandlers();
+                } catch (error) {
+                    console.error('Failed to render events:', error);
+                    apiUtils.showError(error, 'render-error');
+                    
+                    const container = document.getElementById('eventList');
+                    if (container) {
+                        container.innerHTML = '<p class="error-message">Failed to load events. Please try again.</p>';
+                    }
+                }
+            }
+
+            createEventCard(event) {
+                const profit = (event.revenue || 0) - (event.budget || 0);
+                const profitClass = profit >= 0 ? 'profit-positive' : 'profit-negative';
+                const profitSymbol = profit >= 0 ? '+' : '';
+
+                return `
+                    <div class="sponsor-card" data-id="${event.id}">
+                        <div class="sponsor-header">
+                            <h3>${this.escapeHtml(event.name)}</h3>
+                            <span class="industry-badge">${apiUtils.formatDate(event.date)}</span>
+                        </div>
+                        <div class="sponsor-details">
+                            <div class="detail-item">
+                                <span class="label">Budget:</span>
+                                <span class="value">${apiUtils.formatCurrency(event.budget || 0)}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="label">Revenue:</span>
+                                <span class="value">${apiUtils.formatCurrency(event.revenue || 0)}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="label">Footfall:</span>
+                                <span class="value">${event.footfall || 0} attendees</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="label">Profit/Loss:</span>
+                                <span class="value ${profitClass}">${profitSymbol}${apiUtils.formatCurrency(profit)}</span>
+                            </div>
+                        </div>
+                        <div class="sponsor-actions">
+                            <button class="btn-secondary edit-event" data-id="${event.id}">
+                                Edit
+                            </button>
+                            <button class="btn-danger delete-event" data-id="${event.id}">
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+
+            attachEventCardHandlers() {
+                try {
+                    // Edit buttons
+                    document.querySelectorAll('.edit-event').forEach(btn => {
+                        btn.addEventListener('click', (e) => {
+                            const eventId = parseInt(e.target.dataset.id);
+                            this.handleEditEvent(eventId);
+                        });
+                    });
+
+                    // Delete buttons
+                    document.querySelectorAll('.delete-event').forEach(btn => {
+                        btn.addEventListener('click', (e) => {
+                            const eventId = parseInt(e.target.dataset.id);
+                            this.handleDeleteEvent(eventId);
+                        });
+                    });
+                } catch (error) {
+                    console.error('Failed to attach event card handlers:', error);
+                }
+            }
+
+            handleSearch(event) {
+                try {
+                    const searchTerm = event.target.value.toLowerCase().trim();
+                    
+                    if (searchTerm === '') {
+                        this.renderEvents();
+                        return;
+                    }
+
+                    const filteredEvents = this.events.filter(event => 
+                        event.name.toLowerCase().includes(searchTerm) ||
+                        (event.date && event.date.includes(searchTerm))
+                    );
+
+                    this.renderEvents(filteredEvents);
+                } catch (error) {
+                    console.error('Search failed:', error);
+                    apiUtils.showError(error, 'search-error');
+                }
+            }
+
+            handleFilter(event) {
+                try {
+                    const filterType = event.target.value;
+                    
+                    if (filterType === '') {
+                        this.renderEvents();
+                        return;
+                    }
+
+                    const now = new Date();
+                    const filteredEvents = this.events.filter(event => {
+                        const eventDate = new Date(event.date);
+                        
+                        switch (filterType) {
+                            case 'upcoming':
+                                return eventDate >= now;
+                            case 'past':
+                                return eventDate < now;
+                            case 'last30':
+                                const thirtyDaysAgo = new Date(now.getTime() - (30 * 24 * 60 * 60 * 1000));
+                                return eventDate >= thirtyDaysAgo && eventDate < now;
+                            case 'next30':
+                                const thirtyDaysLater = new Date(now.getTime() + (30 * 24 * 60 * 60 * 1000));
+                                return eventDate >= now && eventDate <= thirtyDaysLater;
+                            default:
+                                return true;
+                        }
+                    });
+
+                    this.renderEvents(filteredEvents);
+                } catch (error) {
+                    console.error('Filter failed:', error);
+                    apiUtils.showError(error, 'filter-error');
+                }
+            }
+
+            handleAddEvent() {
+                this.currentEventId = null;
+                this.openModal('Add Event');
+            }
+
+            handleEditEvent(eventId) {
+                try {
+                    const event = this.events.find(e => e.id === eventId);
+                    if (!event) {
+                        throw new Error('Event not found');
+                    }
+
+                    this.currentEventId = eventId;
+                    this.populateEventForm(event);
+                    this.openModal('Edit Event');
+                } catch (error) {
+                    console.error('Failed to edit event:', error);
+                    apiUtils.showError(error, 'edit-event-error');
+                }
+            }
+
+            populateEventForm(event) {
+                document.getElementById('eventName').value = event.name || '';
+                document.getElementById('eventDate').value = event.date || '';
+                document.getElementById('eventBudget').value = event.budget || '';
+                document.getElementById('eventFootfall').value = event.footfall || '';
+                document.getElementById('eventRevenue').value = event.revenue || '';
+            }
+
+            async handleSaveEvent(event) {
+                event.preventDefault();
+
+                try {
+                    const eventData = {
+                        name: document.getElementById('eventName').value.trim(),
+                        date: document.getElementById('eventDate').value,
+                        budget: parseFloat(document.getElementById('eventBudget').value) || 0,
+                        footfall: parseInt(document.getElementById('eventFootfall').value) || 0,
+                        revenue: parseFloat(document.getElementById('eventRevenue').value) || 0
+                    };
+
+                    // Validation
+                    if (!eventData.name) {
+                        throw new Error('Event name is required');
+                    }
+                    if (!eventData.date) {
+                        throw new Error('Event date is required');
+                    }
+                    if (eventData.budget < 0) {
+                        throw new Error('Budget cannot be negative');
+                    }
+                    if (eventData.footfall < 0) {
+                        throw new Error('Footfall cannot be negative');
+                    }
+                    if (eventData.revenue < 0) {
+                        throw new Error('Revenue cannot be negative');
+                    }
+
+                    this.setLoading(true);
+
+                    let result;
+                    if (this.currentEventId) {
+                        result = await apiMethods.events.update(this.currentEventId, eventData);
+                    } else {
+                        result = await apiMethods.events.create(eventData);
+                    }
+
+                    // Refresh events list
+                    await this.loadEvents();
+                    this.renderEvents();
+                    
+                    this.closeModal();
+                    apiUtils.showSuccess(`Event ${this.currentEventId ? 'updated' : 'created'} successfully!`);
+                } catch (error) {
+                    console.error('Failed to save event:', error);
+                    apiUtils.showError(error, 'modal-error-container');
+                } finally {
+                    this.setLoading(false);
+                }
+            }
+
+            async handleDeleteEvent(eventId) {
+                try {
+                    const event = this.events.find(e => e.id === eventId);
+                    if (!event) {
+                        throw new Error('Event not found');
+                    }
+
+                    const confirmed = confirm(`Are you sure you want to delete "${event.name}"?`);
+                    if (!confirmed) return;
+
+                    this.setLoading(true);
+                    await apiMethods.events.delete(eventId);
+                    
+                    // Remove from local array
+                    this.events = this.events.filter(e => e.id !== eventId);
+                    this.renderEvents();
+                    
+                    apiUtils.showSuccess('Event deleted successfully!');
+                } catch (error) {
+                    console.error('Failed to delete event:', error);
+                    apiUtils.showError(error, 'delete-event-error');
+                } finally {
+                    this.setLoading(false);
+                }
+            }
+
+            async handleRefresh() {
+                if (this.isLoading) return;
+
+                try {
+                    this.isLoading = true;
+                    this.setLoading(true);
+                    
+                    await this.loadEvents();
+                    this.renderEvents();
+                    
+                    apiUtils.showSuccess('Events refreshed successfully!');
+                } catch (error) {
+                    console.error('Failed to refresh events:', error);
+                    apiUtils.showError(error, 'refresh-error');
+                } finally {
+                    this.isLoading = false;
+                    this.setLoading(false);
+                }
+            }
+
+            async handleLogout() {
+                try {
+                    await apiMethods.auth.logout();
+                    window.location.href = 'login.html';
+                } catch (error) {
+                    console.error('Logout failed:', error);
+                    window.location.href = 'login.html';
+                }
+            }
+
+            openModal(title) {
+                document.getElementById('modalTitle').textContent = title;
+                document.getElementById('eventModal').style.display = 'block';
+                document.body.style.overflow = 'hidden';
+            }
+
+            closeModal() {
+                document.getElementById('eventModal').style.display = 'none';
+                document.body.style.overflow = 'auto';
+                document.getElementById('eventForm').reset();
+                
+                // Clear messages
+                document.getElementById('modal-error-container').style.display = 'none';
+                document.getElementById('modal-success-container').style.display = 'none';
+                
+                this.currentEventId = null;
+            }
+
+            setLoading(loading) {
+                const overlay = document.getElementById('loading-overlay');
+                if (overlay) {
+                    overlay.style.display = loading ? 'flex' : 'none';
+                }
+            }
+
+            escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+        }
+
+        // Initialize events page when DOM is ready
+        document.addEventListener('DOMContentLoaded', () => {
+            try {
+                window.eventsManager = new EventsManager();
+                
+                // Global error handlers
+                window.addEventListener('error', (event) => {
+                    console.error('Global error caught:', event.error);
+                    apiUtils.showError(
+                        { message: 'An unexpected error occurred. Please refresh the page.' },
+                        'global-error'
+                    );
+                });
+
+                window.addEventListener('unhandledrejection', (event) => {
+                    console.error('Unhandled promise rejection:', event.reason);
+                    apiUtils.showError(
+                        { message: 'A network error occurred. Please check your connection.' },
+                        'promise-error'
+                    );
+                    event.preventDefault();
+                });
+
+                // Close modal when clicking outside
+                window.addEventListener('click', (event) => {
+                    const modal = document.getElementById('eventModal');
+                    if (event.target === modal) {
+                        window.eventsManager.closeModal();
+                    }
+                });
+            } catch (error) {
+                console.error('Failed to initialize events page:', error);
+                apiUtils.showError(
+                    { message: 'Events page initialization failed. Please refresh the page.' },
+                    'init-error'
+                );
+            }
+        });
+    </script>
+</body>
+</html>

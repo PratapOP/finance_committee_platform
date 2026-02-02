@@ -4,7 +4,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class Config:
-    SECRET_KEY = os.getenv("SECRET_KEY", "super-secret-fc-key")
+    # Security: SECRET_KEY is now mandatory - no fallback
+    SECRET_KEY = os.getenv("SECRET_KEY")
+    if not SECRET_KEY:
+        raise ValueError("SECRET_KEY environment variable is required. Set it in your .env file.")
 
     # MySQL Database Connection
     DB_USER = os.getenv("DB_USER", "root")

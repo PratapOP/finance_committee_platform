@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Finance Committee</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="logo">
+            <img src="assets/logo.svg" alt="Finance Committee Logo" onerror="this.style.display='none'">
+            <span>Admin Dashboard</span>
+        </div>
+        <div class="nav-links">
+            <a href="dashboard.html" class="nav-link">Dashboard</a>
+            <a href="sponsors.html" class="nav-link">Sponsors</a>
+            <a href="#" class="nav-link active">Admin</a>
+            <a href="#" class="nav-link" id="logoutBtn">Logout</a>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="admin-container">
+        <div class="admin-header">
+            <h1>Admin Management Panel</h1>
+            <p>Manage users, system settings, and platform administration</p>
+        </div>
+
+        <!-- Error/Success Messages -->
+        <div id="error-container" class="error-message" style="display: none;"></div>
+        <div id="success-container" class="success-message" style="display: none;"></div>
+
+        <!-- Admin Sections -->
+        <div class="admin-sections">
+            <!-- User Management -->
+            <section class="admin-section">
+                <div class="section-header">
+                    <h2>User Management</h2>
+                    <button class="btn-primary" id="addUserBtn">Add User</button>
+                </div>
+                <div class="users-grid" id="usersGrid">
+                    <div class="loading-placeholder">Loading users...</div>
+                </div>
+            </section>
+
+            <!-- System Statistics -->
+            <section class="admin-section">
+                <h2>System Overview</h2>
+                <div class="admin-stats">
+                    <div class="admin-stat-card">
+                        <h3>Total Users</h3>
+                        <span id="totalUsers" class="stat-value">0</span>
+                    </div>
+                    <div class="admin-stat-card">
+                        <h3>Total Sponsors</h3>
+                        <span id="totalSponsors" class="stat-value">0</span>
+                    </div>
+                    <div class="admin-stat-card">
+                        <h3>Total Events</h3>
+                        <span id="totalEvents" class="stat-value">0</span>
+                    </div>
+                    <div class="admin-stat-card">
+                        <h3>Active Sessions</h3>
+                        <span id="activeSessions" class="stat-value">0</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- System Settings -->
+            <section class="admin-section">
+                <h2>System Settings</h2>
+                <div class="settings-form">
+                    <div class="form-group">
+                        <label for="allowRegistration">Allow New User Registration</label>
+                        <select id="allowRegistration" class="setting-select">
+                            <option value="true">Enabled</option>
+                            <option value="false">Disabled</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="defaultRole">Default User Role</label>
+                        <select id="defaultRole" class="setting-select">
+                            <option value="finance">Finance Member</option>
+                            <option value="admin">Administrator</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="sessionTimeout">Session Timeout (minutes)</label>
+                        <input type="number" id="sessionTimeout" value="60" min="15" max="480" class="setting-input">
+                    </div>
+                    <button class="btn-primary" id="saveSettingsBtn">Save Settings</button>
+                </div>
+            </section>
+
+            <!-- Recent Activity -->
+            <section class="admin-section">
+                <h2>Recent Activity</h2>
+                <div class="activity-log" id="activityLog">
+                    <div class="loading-placeholder">Loading activity...</div>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="loading-overlay" style="display: none;">
+        <div class="loading-spinner"></div>
+    </div>
+
+    <!-- Import API -->
+    <script type="module">
+        import { apiMethods, apiUtils } from './js/api.js';
+
+        class AdminManager {
+            constructor() {
+                this.users = [];
+                this.stats = {};
+                this.init();
+            }
+
+            async init() {
+                try {
+                    this.setupEventListeners();
+                    await this.checkAdminAccess();
+                    await this.loadAdminData();
+                } catch (error) {
+                    console.error('Admin initialization failed:', error);
+                    this.handleError(error);
+                }
+            }
+
+            async checkAdminAccess() {
+                try {
+                    const response = await apiMethods.auth.getProfile();
+                    if (!response.user || response.user.role !== 'admin') {
+                        throw new Error('Admin access required');
+                    }
+                } catch (error) {
+                    console.error('Access check failed:', error);
+                    // Redirect to login with error
+                    window.location.href = 'login.html?error=admin_required';
+                }
+            }
+
+            setupEventListeners() {
+                // Logout button
+                const logoutBtn = document.getElementById('logoutBtn');
+                if (logoutBtn) {
+                    logoutBtn.addEventListener('click', this.handleLogout.bind(this));
+                }
+
+                // Add user button
+                const addUserBtn = document.getElementById('addUserBtn');
+                if (addUserBtn) {
+                    addUserBtn.addEventListener('click', this.handleAddUser.bind(this));
+                }
+
+                // Save settings button
+                const saveSettingsBtn = document.getElementById('saveSettingsBtn');
+                if (saveSettingsBtn) {
+                    saveSettingsBtn.addEventListener('click', this.handleSaveSettings.bind(this));
+                }
+            }
+
+            async loadAdminData() {
+                this.setLoading(true);
+                
+                try {
+                    // Load users
+                    await this.loadUsers();
+                    
+                    // Load statistics
+                    await this.loadStatistics();
+                    
+                    // Load activity log
+                    await this.loadActivityLog();
+                    
+                } catch (error) {
+                    console.error('Failed to load admin data:', error);
+                    this.handleError(error);
+                } finally {
+                    this.setLoading(false);
+                }
+            }
+
+            async loadUsers() {
+                try {
+                    const response = await apiMethods.auth.getUsers();
+                    this.users = response.users || [];
+                    this.renderUsers();
+                } catch (error) {
+                    console.error('Failed to load users:', error);
+                    throw error;
+                }
+            }
+
+            async loadStatistics() {
+                try {
+                    // Mock statistics - in real implementation, get from analytics endpoint
+                    this.stats = {
+                        totalUsers: this.users.length,
+                        totalSponsors: await this.getSponsorCount(),
+                        totalEvents: await this.getEventCount(),
+                        activeSessions: Math.floor(Math.random() * 20) + 5
+                    };
+                    this.renderStatistics();
+                } catch (error) {
+                    console.error('Failed to load statistics:', error);
+                }
+            }
+
+            async getSponsorCount() {
+                try {
+                    const sponsors = await apiMethods.sponsors.getAll();
+                    return sponsors.length || 0;
+                } catch (error) {
+                    return 0;
+                }
+            }
+
+            async getEventCount() {
+                try {
+                    const events = await apiMethods.events.getAll();
+                    return events.length || 0;
+                } catch (error) {
+                    return 0;
+                }
+            }
+
+            renderUsers() {
+                const container = document.getElementById('usersGrid');
+                if (!container) return;
+
+                if (this.users.length === 0) {
+                    container.innerHTML = '<p class="no-data">No users found.</p>';
+                    return;
+                }
+
+                const usersHTML = this.users.map(user => this.createUserCard(user)).join('');
+                container.innerHTML = usersHTML;
+                this.attachUserEventHandlers();
+            }
+
+            createUserCard(user) {
+                const roleBadgeClass = user.role === 'admin' ? 'role-admin' : 'role-finance';
+                const roleBadgeText = user.role === 'admin' ? 'Administrator' : 'Finance Member';
+
+                return `
+                    <div class="user-card" data-user-id="${user.id}">
+                        <div class="user-avatar">
+                            ${user.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div class="user-info">
+                            <h4>${this.escapeHtml(user.name)}</h4>
+                            <p>${this.escapeHtml(user.email)}</p>
+                            <span class="role-badge ${roleBadgeClass}">${roleBadgeText}</span>
+                        </div>
+                        <div class="user-actions">
+                            ${user.role !== 'admin' ? `<button class="btn-sm btn-danger delete-user" data-user-id="${user.id}">Remove</button>` : ''}
+                        </div>
+                    </div>
+                `;
+            }
+
+            attachUserEventHandlers() {
+                // Delete user buttons
+                document.querySelectorAll('.delete-user').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const userId = parseInt(e.target.dataset.userId);
+                        this.handleDeleteUser(userId);
+                    });
+                });
+            }
+
+            renderStatistics() {
+                document.getElementById('totalUsers').textContent = this.stats.totalUsers || 0;
+                document.getElementById('totalSponsors').textContent = this.stats.totalSponsors || 0;
+                document.getElementById('totalEvents').textContent = this.stats.totalEvents || 0;
+                document.getElementById('activeSessions').textContent = this.stats.activeSessions || 0;
+            }
+
+            loadActivityLog() {
+                // Mock activity log - in real implementation, get from backend
+                const mockActivities = [
+                    { action: 'User Login', user: 'John Doe', time: '2 minutes ago' },
+                    { action: 'New Sponsor Added', user: 'Admin', time: '15 minutes ago' },
+                    { action: 'Event Updated', user: 'Jane Smith', time: '1 hour ago' },
+                    { action: 'User Registration', user: 'New User', time: '2 hours ago' }
+                ];
+
+                const container = document.getElementById('activityLog');
+                if (container) {
+                    const activitiesHTML = mockActivities.map(activity => `
+                        <div class="activity-item">
+                            <span class="activity-action">${this.escapeHtml(activity.action)}</span>
+                            <span class="activity-user">${this.escapeHtml(activity.user)}</span>
+                            <span class="activity-time">${activity.time}</span>
+                        </div>
+                    `).join('');
+                    container.innerHTML = activitiesHTML;
+                }
+            }
+
+            async handleAddUser() {
+                const userData = this.promptForUserData();
+                if (!userData) return;
+
+                try {
+                    this.setLoading(true);
+                    await apiMethods.auth.register(userData);
+                    await this.loadUsers(); // Refresh user list
+                    this.handleSuccess('User added successfully!');
+                } catch (error) {
+                    console.error('Failed to add user:', error);
+                    this.handleError(error);
+                } finally {
+                    this.setLoading(false);
+                }
+            }
+
+            async handleDeleteUser(userId) {
+                const user = this.users.find(u => u.id === userId);
+                if (!user) return;
+
+                const confirmed = confirm(`Are you sure you want to remove user "${user.name}"?`);
+                if (!confirmed) return;
+
+                try {
+                    this.setLoading(true);
+                    await apiMethods.auth.deleteUser(userId);
+                    this.handleSuccess('User removed successfully!');
+                    await this.loadUsers(); // Refresh user list
+                } catch (error) {
+                    console.error('Failed to delete user:', error);
+                    this.handleError(error);
+                } finally {
+                    this.setLoading(false);
+                }
+            }
+
+            async handleSaveSettings() {
+                const settings = {
+                    allowRegistration: document.getElementById('allowRegistration').value === 'true',
+                    defaultRole: document.getElementById('defaultRole').value,
+                    sessionTimeout: parseInt(document.getElementById('sessionTimeout').value)
+                };
+
+                try {
+                    this.setLoading(true);
+                    await apiMethods.admin.saveSettings(settings);
+                    this.handleSuccess('Settings saved successfully!');
+                } catch (error) {
+                    console.error('Failed to save settings:', error);
+                    this.handleError(error);
+                } finally {
+                    this.setLoading(false);
+                }
+            }
+
+            async handleLogout() {
+                try {
+                    await apiMethods.auth.logout();
+                    window.location.href = 'login.html';
+                } catch (error) {
+                    console.error('Logout failed:', error);
+                    // Force redirect even if logout fails
+                    window.location.href = 'login.html';
+                }
+            }
+
+            promptForUserData() {
+                const name = prompt('User Name:');
+                if (!name || name.trim() === '') return null;
+
+                const email = prompt('Email Address:');
+                if (!email || email.trim() === '') return null;
+
+                const password = prompt('Password:');
+                if (!password || password.length < 8) return null;
+
+                const role = confirm('Make this user an administrator?') ? 'admin' : 'finance';
+
+                return {
+                    name: name.trim(),
+                    email: email.trim().toLowerCase(),
+                    password: password,
+                    role: role
+                };
+            }
+
+            setLoading(loading) {
+                const overlay = document.getElementById('loading-overlay');
+                if (overlay) {
+                    overlay.style.display = loading ? 'flex' : 'none';
+                }
+            }
+
+            handleSuccess(message) {
+                apiUtils.showSuccess(message, 'success-container');
+            }
+
+            handleError(error) {
+                apiUtils.showError(error, 'error-container');
+            }
+
+            escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+        }
+
+        // Initialize admin manager
+        window.adminManager = new AdminManager();
+
+        // Global error handlers
+        window.addEventListener('error', (event) => {
+            console.error('Global error caught:', event.error);
+            window.adminManager.handleError(event.error);
+        });
+
+        window.addEventListener('unhandledrejection', (event) => {
+            console.error('Unhandled promise rejection:', event.reason);
+            window.adminManager.handleError(event.reason);
+            event.preventDefault();
+        });
+    </script>
+</body>
+</html>

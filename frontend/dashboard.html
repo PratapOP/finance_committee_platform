@@ -2,6 +2,9 @@
 <html>
 <head>
     <title>FC Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -9,14 +12,15 @@
 
 <nav class="navbar">
     <div class="logo">
-        <img src="assets/logo.png">
+        <img src="assets/logo.svg">
         <span>Finance Committee</span>
     </div>
-    <div class="nav-links">
+<div class="nav-links">
         <a href="index.html">Home</a>
-        <a href="#">Sponsors</a>
+        <a href="sponsors.html">Sponsors</a>
         <a href="#">Events</a>
         <a href="#">Reports</a>
+        <a href="#" id="logoutBtn">Logout</a>
     </div>
 </nav>
 
@@ -35,8 +39,10 @@
     </div>
 </section>
 
-<section style="padding: 60px;">
-    <canvas id="financeChart"></canvas>
+<section class="chart-section">
+    <div class="chart-container">
+        <canvas id="financeChart"></canvas>
+    </div>
 </section>
 
 <script src="js/dashboard.js"></script>
